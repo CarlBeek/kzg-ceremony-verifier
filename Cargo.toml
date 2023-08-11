@@ -1,0 +1,21 @@
+[package]
+version = "0.1.0"
+name = "kzg-ceremony-verifier"
+description = "Verification of the Ethereum KZG Ceremony transcript"
+authors = ["Carl Beekhuizen <mail@carlbeek.com>"]
+edition = "2021"
+
+[features]
+default = []
+
+[workspace]
+members = [
+    "crypto",
+]
+
+[dependencies]
+ark-serialize = { version = "0.3" }
+eyre = "0.6.8"
+kzg-ceremony-crypto = { path = "./crypto", features = ["blst"]}
+serde_json = "1.0.87"
+
