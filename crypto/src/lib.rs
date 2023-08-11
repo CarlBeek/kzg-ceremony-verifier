@@ -10,6 +10,7 @@ mod group;
 mod hex_format;
 mod powers;
 pub mod signature;
+mod spinner;
 mod transcript;
 
 pub use crate::{
@@ -19,6 +20,7 @@ pub use crate::{
     group::{F, G1, G2},
     powers::Powers,
     signature::identity::Identity,
+    spinner::create_spinner,
     transcript::Transcript,
 };
 

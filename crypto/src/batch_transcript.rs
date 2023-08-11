@@ -1,6 +1,6 @@
 use crate::{
-    signature::{identity::Identity, ContributionTypedData, EcdsaSignature},
-    CeremoniesError, Engine, Transcript,
+    signature::{identity::Identity, EcdsaSignature},
+    CeremoniesError, Engine, create_spinner, Transcript,
 };
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -42,17 +42,19 @@ impl BatchTranscript {
         &self,
         sizes: Vec<(usize, usize)>,
     ) -> Result<(), CeremoniesError> {
+        let spinner = create_spinner();
+        spinner.set_message("Verifying Powers of Tau...");
         // Verify transcripts in parallel
         self.transcripts
             .par_iter()
             .zip(&sizes)
             .enumerate()
             .try_for_each(|(i, (transcript, (num_g1, num_g2)))| {
-                println!("Verifying ceremony {}", i);
                 transcript
                     .verify_self::<E>(*num_g1, *num_g2)
                     .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
             })?;
+        spinner.finish_with_message("Powers of Tau verified!");
         Ok(())
     }
 }
