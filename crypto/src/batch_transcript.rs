@@ -35,10 +35,20 @@ impl BatchTranscript {
         self.participant_ids.len() - 1
     }
 
-    // Verifies an entire batch transcript (including all pairing checks)
+
+    pub fn verify_self<E: Engine>(
+        &self,
+        sizes: Vec<(usize, usize)>,
+    ) -> Result<(), CeremoniesError> {
+        self.verify_powers::<E>(sizes)?;
+        self.verify_witnesses::<E>()?;
+        Ok(())
+    }
+
+    // Verifies the PoT of all the transcripts
     // given a vector of expected (num_g1, num_g2) points
     #[instrument(level = "info", skip_all, fields(n=self.transcripts.len()))]
-    pub fn verify_self<E: Engine>(
+    pub fn verify_powers<E: Engine>(
         &self,
         sizes: Vec<(usize, usize)>,
     ) -> Result<(), CeremoniesError> {
@@ -51,10 +61,30 @@ impl BatchTranscript {
             .enumerate()
             .try_for_each(|(i, (transcript, (num_g1, num_g2)))| {
                 transcript
-                    .verify_self::<E>(*num_g1, *num_g2)
+                    .verify_powers::<E>(*num_g1, *num_g2)
                     .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
             })?;
         spinner.finish_with_message("Powers of Tau verified!");
+        Ok(())
+    }
+
+    // Verifies witnesses are valid for all the transcripts
+    #[instrument(level = "info", skip_all, fields(n=self.transcripts.len()))]
+    pub fn verify_witnesses<E: Engine>(
+        &self,
+    ) -> Result<(), CeremoniesError> {
+        let spinner = create_spinner();
+        spinner.set_message("Verifying contribution witnesses...");
+        // Verify transcripts in parallel
+        self.transcripts
+            .par_iter()
+            .enumerate()
+            .try_for_each(|(i, transcript)| {
+                transcript
+                    .verify_witnesses::<E>()
+                    .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
+            })?;
+        spinner.finish_with_message("All contributions verified!");
         Ok(())
     }
 }

@@ -57,8 +57,8 @@ impl Transcript {
         self.num_participants() > 0
     }
 
-    // Verifies that it is a valid transcript itself
-    pub fn verify_self<E: Engine>(
+    // Verifies the Powers of Tau are correctly constructed
+    pub fn verify_powers<E: Engine>(
         &self,
         num_g1: usize,
         num_g2: usize,
@@ -83,19 +83,9 @@ impl Transcript {
             ));
         }
 
-        // Sanity checks on num pubkeys & products
-        if self.witness.products.len() != self.witness.pubkeys.len() {
-            return Err(CeremonyError::WitnessLengthMismatch(
-                self.witness.products.len(),
-                self.witness.pubkeys.len(),
-            ));
-        }
-
         // Point sanity checks (encoding and subgroup checks).
         E::validate_g1(&self.powers.g1)?;
         E::validate_g2(&self.powers.g2)?;
-        E::validate_g1(&self.witness.products)?;
-        E::validate_g2(&self.witness.pubkeys)?;
 
         // Non-zero checks
         if self
@@ -106,6 +96,27 @@ impl Transcript {
         {
             return Err(CeremonyError::ZeroPubkey);
         }
+        // Verify powers are correctly constructed
+        E::verify_g1(&self.powers.g1, self.powers.g2[1])?;
+        E::verify_g2(&self.powers.g1[..self.powers.g2.len()], &self.powers.g2)?;
+
+        Ok(())
+    }
+
+    pub fn verify_witnesses<E: Engine>(
+        &self,
+    ) -> Result<(), CeremonyError> {
+        // Sanity checks on num pubkeys & products
+        if self.witness.products.len() != self.witness.pubkeys.len() {
+            return Err(CeremonyError::WitnessLengthMismatch(
+                self.witness.products.len(),
+                self.witness.pubkeys.len(),
+            ));
+        }
+
+        // Point sanity checks (encoding and subgroup checks).
+        E::validate_g1(&self.witness.products)?;
+        E::validate_g2(&self.witness.pubkeys)?;
 
         // Pairing check all pubkeys
         // TODO: figure out how to do this with some kind of batched pairings
@@ -130,11 +141,6 @@ impl Transcript {
         if self.powers.g1[1] != self.witness.products[self.witness.products.len() - 1] {
             return Err(CeremonyError::G1ProductMismatch);
         }
-
-        // Verify powers are correctly constructed
-        E::verify_g1(&self.powers.g1, self.powers.g2[1])?;
-        E::verify_g2(&self.powers.g1[..self.powers.g2.len()], &self.powers.g2)?;
-
         Ok(())
     }
 }
