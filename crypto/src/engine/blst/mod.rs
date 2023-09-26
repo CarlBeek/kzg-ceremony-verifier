@@ -3,9 +3,9 @@ mod g2;
 mod scalar;
 
 use self::{
-    g1::{p1_affine_in_g1, p1_from_affine, p1_mult, p1s_mult_pippenger, p1s_to_affine},
+    g1::{p1_affine_in_g1, p1_from_affine, p1_add, p1_neg, p1_mult, p1s_mult_pippenger, p1s_to_affine},
     g2::{p2_affine_in_g2, p2_from_affine, p2_mult, p2_to_affine, p2s_to_affine},
-    scalar::{fr_from_scalar, fr_mul, fr_one, random_fr, scalar_from_fr},
+    scalar::{fr_from_scalar, fr_sub, fr_mul, fr_div, fr_exp, fr_zero, fr_one, random_fr, scalar_from_fr, fr_from_u64, fr_inv},
 };
 use crate::{
     engine::blst::{g1::p1_to_affine, g2::p2s_mult_pippenger, scalar::Scalar},
@@ -228,6 +228,31 @@ impl Engine for BLST {
         };
         result == BLST_ERROR::BLST_SUCCESS
     }
+
+    fn get_lagrange_g1(points: &[G1]) -> Result<Vec<G1>, CeremonyError> {
+        let domain = compute_roots_of_unity(points.len(), fr_from_u64(Self::PRIMITIVE_ROOT_OF_UNITY));
+    
+        let points_p1: Result<Vec<blst_p1>, ParseError> = points
+            .par_iter()
+            .map(|&p| blst_p1_affine::try_from(p).map(|p| p1_from_affine(&p)))
+            .collect();
+    
+        let points_p1 = points_p1.map_err(|err| CeremonyError::from(err));
+    
+        let fft_output = fft(points_p1?, domain);
+    
+        let inv_length = fr_inv(&&fr_from_u64(points.len() as u64));
+    
+        let result: Result<Vec<G1>, CeremonyError> = fft_output
+            .iter()
+            .map(|point| {
+                let res_point = p1_mult(&point, &scalar_from_fr(&inv_length));
+                G1::try_from(p1_to_affine(&res_point)).map_err(|err| CeremonyError::from(err))
+            })
+            .collect();
+    
+        result
+    }
 }
 
 fn pairing(p: &blst_p1_affine, q: &blst_p2_affine) -> blst_fp12 {
@@ -271,6 +296,48 @@ fn random_factors(n: usize) -> (Vec<blst_scalar>, blst_scalar) {
     (factors, scalar_from_fr(&sum))
 }
 
+
+fn compute_root_of_unity(length: usize, primitive_root: blst_fr) -> blst_fr {
+    let mod_minus_1 = fr_sub(&fr_zero(), &fr_one());
+    let exponent = fr_div(&mod_minus_1, &fr_from_u64(length as u64));
+    fr_exp(&primitive_root, &exponent)
+}
+
+fn compute_roots_of_unity(num_roots: usize, primitive_root: blst_fr) -> Vec<blst_fr> {
+    let root_of_unity = compute_root_of_unity(num_roots, primitive_root);
+
+    let mut roots = Vec::new();
+    let mut current_root_of_unity = fr_one();
+    for _ in 0..num_roots {
+        roots.push(current_root_of_unity);
+        current_root_of_unity = fr_mul(&current_root_of_unity, &root_of_unity);
+    }
+    roots
+}
+
+
+fn fft(vals: Vec<blst_p1>, domain: Vec<blst_fr>) -> Vec<blst_p1> {
+    if vals.len() == 1 {
+        return vals;
+    }
+
+    let l_vals: Vec<blst_p1> = vals.iter().step_by(2).cloned().collect();
+    let r_vals: Vec<blst_p1> = vals.iter().skip(1).step_by(2).cloned().collect();
+    
+    let l_domain: Vec<blst_fr> = domain.iter().step_by(2).cloned().collect();
+    
+    let l = fft(l_vals, l_domain.clone());
+    let r = fft(r_vals, l_domain);
+
+    let mut o = vec![blst_p1::default(); vals.len()];
+    for (i, (x, y)) in l.iter().zip(r.iter()).enumerate() {
+        let y_times_root = p1_mult(&y, &scalar_from_fr(&domain[i]));
+        
+        o[i] = p1_add(&x, &y_times_root);
+        o[i + l.len()] = p1_add(x, &p1_neg(&y_times_root));
+    }
+    o
+}
 #[cfg(test)]
 mod tests {
     use super::*;

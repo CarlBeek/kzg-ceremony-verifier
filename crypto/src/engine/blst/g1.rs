@@ -1,7 +1,7 @@
 use crate::{ParseError, G1};
 use blst::{
     blst_p1, blst_p1_affine, blst_p1_affine_compress, blst_p1_affine_in_g1, blst_p1_from_affine,
-    blst_p1_mult, blst_p1_to_affine, blst_p1_uncompress, blst_p1s_mult_pippenger,
+    blst_p1_add, blst_p1_cneg, blst_p1_mult, blst_p1_to_affine, blst_p1_uncompress, blst_p1s_mult_pippenger,
     blst_p1s_mult_pippenger_scratch_sizeof, blst_p1s_to_affine, blst_scalar, limb_t, BLST_ERROR,
 };
 use std::{mem::size_of, ptr};
@@ -55,6 +55,22 @@ pub fn p1_to_affine(a: &blst_p1) -> blst_p1_affine {
         let mut p = blst_p1_affine::default();
         blst_p1_to_affine(&mut p, a);
         p
+    }
+}
+
+pub fn p1_add(a: &blst_p1, b: &blst_p1) -> blst_p1 {
+    unsafe {
+        let mut out = blst_p1::default();
+        blst_p1_add(&mut out, a, b);
+        out
+    }
+}
+
+pub fn p1_neg(a: &blst_p1) -> blst_p1 {
+    unsafe {
+        let mut out = a.clone();
+        blst_p1_cneg(&mut out, true);
+        out
     }
 }
 

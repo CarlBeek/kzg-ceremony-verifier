@@ -25,6 +25,7 @@ pub type Tau = Secret<F>;
 
 pub trait Engine {
     const CYPHER_SUITE: &'static str = "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_POP_";
+    const PRIMITIVE_ROOT_OF_UNITY: u64 = 7;
 
     /// Verifies that the given G1 points are valid.
     ///
@@ -91,6 +92,8 @@ pub trait Engine {
 
     /// Verify a `CYPHER_SUITE` signature.
     fn verify_signature(sig: G1, message: &[u8], pk: G2) -> bool;
+
+    fn get_lagrange_g1(points: &[G1]) -> Result<Vec<G1>, CeremonyError>;
 }
 
 #[cfg(all(test, feature = "arkworks", feature = "blst"))]

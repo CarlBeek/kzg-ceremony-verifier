@@ -8,6 +8,7 @@ mod hashing;
 mod zcash_format;
 
 use self::endomorphism::{g1_mul_glv, g1_subgroup_check, g2_subgroup_check};
+use crate::engine::arkworks::scalar::fr_exp;
 use super::Engine;
 use crate::{
     engine::arkworks::hashing::{
@@ -17,12 +18,12 @@ use crate::{
     CeremonyError, Entropy, ParseError, Tau, F, G1, G2,
 };
 use ark_bls12_381::{
-    g1::Parameters as G1Parameters, Bls12_381, Fr, G1Affine, G1Projective, G2Affine, G2Projective,
+    g1::Parameters as G1Parameters, Bls12_381, Fr, FrParameters, G1Affine, G1Projective, G2Affine, G2Projective,
 };
 use ark_ec::{
     msm::VariableBaseMSM, wnaf::WnafContext, AffineCurve, PairingEngine, ProjectiveCurve,
 };
-use ark_ff::{BigInteger, One, PrimeField, UniformRand, Zero};
+use ark_ff::{BigInteger, One, PrimeField, UniformRand, Zero, FpParameters, Field};
 use digest::Digest;
 use hkdf::Hkdf;
 use rand::{Rng, SeedableRng};
@@ -30,7 +31,7 @@ use rand_chacha::ChaCha20Rng;
 use rayon::prelude::*;
 use secrecy::{ExposeSecret, Secret, SecretVec};
 use sha2::Sha256;
-use std::iter;
+use std::{iter, ops::MulAssign};
 use tracing::instrument;
 
 /// Arkworks implementation of [`Engine`] with additional endomorphism
@@ -235,6 +236,26 @@ impl Engine for Arkworks {
 
         c1 == c2
     }
+
+    fn get_lagrange_g1(points: &[G1]) -> Vec<G1> {
+        let root_of_unity = compute_root_of_unity(setup.len()).unwrap();
+    
+        let domain: Vec<Fr> = (0..setup.len())
+            .map(|i| root_of_unity.pow([i as u64]))
+            .collect();
+
+        let fft_output = fft(setup, domain);
+        
+        let inv_length = Fr::from(setup.len() as u64).inverse().unwrap();
+        
+        fft_output.iter().rev().map(|point| {
+            let res_point = point.mul(inv_length.into_repr());
+            let affine = G1Affine::from(res_point);
+            let mut bytes = [0u8; 48];
+            affine.into_repr().write(bytes.as_mut()).unwrap();
+            bytes
+        }).collect()
+    }
 }
 
 // Implementation of the KeyGen function as specified in
@@ -288,6 +309,64 @@ fn random_factors(n: usize) -> (Vec<<Fr as PrimeField>::BigInt>, Fr) {
     .take(n)
     .collect::<Vec<_>>();
     (factors, sum)
+}
+
+pub fn fr_exp(a: &Fr, pow: &Fr) -> Fr {
+    let mut result = Fr::zero();
+    let mut base = *a;
+
+    // Perform square and multiply algorithm
+    let mut n = pow;
+    while n > 0 {
+        if n & 1 == 1 {
+            // Multiply result by base
+            result.mul_assign(&base);
+        }
+        // Square the base
+        base.square_in_place();
+        n >>= 1; // Right shift n by 1
+    }
+    result
+}
+
+fn compute_root_of_unity(length: usize, primitive_root: Fr) -> Fr {
+    let exponent = (Fr::zero() - Fr::one()) / Fr::from(length as u64);
+    return fr_exp(&primitive_root, exponent.into_repr());
+}
+
+fn compute_roots_of_unity(field_elements_per_blob: usize, primitive_root: Fr) -> Vec<Fr> {
+    let root_of_unity = compute_root_of_unity(field_elements_per_blob, primitive_root);
+
+    let mut roots = Vec::new();
+    let mut current_root_of_unity = Fr::one();
+    for _ in 0..field_elements_per_blob {
+        roots.push(current_root_of_unity);
+        current_root_of_unity.mul_assign(&root_of_unity);
+    }
+    roots
+}
+
+
+fn fft(vals: Vec<G1Projective>, domain: Vec<Fr>) -> Vec<G1Projective> {
+    if vals.len() == 1 {
+        return vals;
+    }
+
+    let l_vals: Vec<G1Projective> = vals.iter().step_by(2).cloned().collect();
+    let r_vals: Vec<G1Projective> = vals.iter().skip(1).step_by(2).cloned().collect();
+    
+    let l_domain: Vec<Fr> = domain.iter().step_by(2).cloned().collect();
+    
+    let L = fft(l_vals, l_domain.clone());
+    let R = fft(r_vals, l_domain);
+
+    let mut o = vec![G1Projective::zero(); vals.len()];
+    for (i, (x, y)) in L.iter().zip(R.iter()).enumerate() {
+        let y_times_root = y.mul(domain[i]);
+        o[i] = x.add_mixed(&y_times_root);
+        o[i + L.len()] = x.sub(&y_times_root);
+    }
+    return o;
 }
 
 impl From<&F> for Fr {

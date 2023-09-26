@@ -1,7 +1,7 @@
 use crate::F;
 use blst::{
-    blst_fr, blst_fr_add, blst_fr_from_scalar, blst_fr_mul, blst_keygen, blst_lendian_from_scalar,
-    blst_scalar, blst_scalar_from_fr, blst_scalar_from_lendian, blst_scalar_from_uint64,
+    blst_fr, blst_fr_add, blst_fr_from_scalar, blst_fr_mul, blst_fr_sub, blst_fr_inverse, blst_keygen, blst_lendian_from_scalar,
+    blst_scalar, blst_scalar_from_fr, blst_scalar_from_lendian, blst_scalar_from_uint64, blst_uint64_from_fr, blst_fr_rshift,
 };
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -42,12 +42,56 @@ pub fn fr_add(a: &blst_fr, b: &blst_fr) -> blst_fr {
     out
 }
 
+pub fn fr_sub(a: &blst_fr, b: &blst_fr) -> blst_fr {
+    let mut out = blst_fr::default();
+    unsafe {
+        blst_fr_sub(&mut out, a, b);
+    }
+    out
+}
+
 pub fn fr_mul(a: &blst_fr, b: &blst_fr) -> blst_fr {
     let mut out = blst_fr::default();
     unsafe {
         blst_fr_mul(&mut out, a, b);
     }
     out
+}
+
+pub fn fr_inv(a: &blst_fr) -> blst_fr {
+    let mut out = blst_fr::default();
+    unsafe {
+        blst_fr_inverse(&mut out, a);
+    }
+    out
+}
+
+pub fn fr_div(a: &blst_fr, b: &blst_fr) -> blst_fr {
+    let inv = fr_inv(b);
+    fr_mul(a, &inv)
+}
+
+pub fn fr_is_odd(a: &blst_fr) -> bool {
+    let truncated_a = u64_from_fr(a);
+    truncated_a & 1 == 1
+}
+
+pub fn fr_exp(a: &blst_fr, pow: &blst_fr) -> blst_fr {
+    let mut result = blst_fr::default();
+    let mut base = *a;
+    let mut n = pow.clone(); // Introduce a new variable to hold the updated value of `n`
+
+    // Perform square and multiply algorithm
+    while n.ne(&fr_zero()) {
+        if fr_is_odd(&n) {
+            unsafe { blst_fr_mul(&mut result, &result, &base); }
+        }
+        
+        // Square and shift
+        unsafe { blst_fr_mul(&mut base, &base, &base); }
+        unsafe { blst_fr_rshift(&mut n, &n.clone(), 1) }
+    }
+    result
 }
 
 #[allow(dead_code)] // Currently only used in tests
@@ -82,6 +126,19 @@ pub fn scalar_from_u64(a: u64) -> blst_scalar {
         blst_scalar_from_uint64(&mut scalar, input.as_ptr());
     }
     scalar
+}
+
+pub fn fr_from_u64(a: u64) -> blst_fr {
+    let scalar = scalar_from_u64(a);
+    fr_from_scalar(&scalar)
+}
+
+pub fn u64_from_fr(a: &blst_fr) -> u64 {
+    let mut ret = 0u64;
+    unsafe {
+        blst_uint64_from_fr(&mut ret, a);
+    }
+    ret
 }
 
 impl From<&F> for blst_scalar {

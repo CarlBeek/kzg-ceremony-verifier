@@ -91,4 +91,9 @@ impl<A: Engine, B: Engine> Engine for Both<A, B> {
         assert_eq!(a, b);
         a
     }
+
+    fn get_lagrange_g1(points: &[G1]) -> Result<Vec<G1>, CeremonyError> {
+        let b = B::get_lagrange_g1(points)?;
+        Ok(b)
+    }
 }
