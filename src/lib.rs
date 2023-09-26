@@ -25,7 +25,7 @@ pub fn verify_with_string(json: String) -> Result<BatchTranscript> {
     spinner.finish_with_message("Transcript loaded.");
 
     let sizes = vec![(4096, 65), (8192, 65), (16384, 65), (32768, 65)];
-    // let result = batch_transcript.verify_self::<BLST>(sizes);
+    let result = batch_transcript.verify_self::<BLST>(sizes);
 
     // let is_valid = match result {
     //     Ok(()) => true,

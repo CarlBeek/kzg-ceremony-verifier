@@ -148,17 +148,16 @@ impl Transcript {
     }
 
     pub fn output_json_setup<E: Engine>(&self, folder: &str) -> Result<(), CeremonyError> {
-        println!("calculating lagrange for {}", self.powers.g1.len());
         let g1_lagrange = E::get_lagrange_g1(&self.powers.g1)?;
         let json = OutputJson {
-            g1_lagrange: g1_lagrange,
-            g2_monomial: self.powers.g2.clone(),
+            G1_lagrange: g1_lagrange,
+            G2_monomial: self.powers.g2.clone(),
         };
 
-        let file_path = PathBuf::from(folder).join("trusted_setup_{self.powers.g1.len()}.json");
-        let file = File::create(file_path).unwrap();
+        let file_path = PathBuf::from(folder).join(format!("trusted_setup_{}.json", self.powers.g1.len()));
+        let file = File::create(file_path)?;
         let writer = BufWriter::new(file);
-        serde_json::to_writer_pretty(writer, &json).unwrap();
+        serde_json::to_writer_pretty(writer, &json)?;
         Ok(())
     }
 }

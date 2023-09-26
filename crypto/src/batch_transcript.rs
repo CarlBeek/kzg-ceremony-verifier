@@ -1,3 +1,5 @@
+use std::{fs, fmt::format, path};
+
 use crate::{
     signature::{identity::Identity, EcdsaSignature},
     CeremoniesError, Engine, create_spinner, Transcript,
@@ -92,6 +94,8 @@ impl BatchTranscript {
     pub fn output_json_setups<E: Engine>(&self, folder: &str) -> Result<(), CeremoniesError> {
         let spinner = create_spinner();
         spinner.set_message("Outputting JSON setups...");
+        // Create output folder if it doesn't exist
+        fs::create_dir_all(&folder).unwrap();
         // Verify transcripts in parallel
         self.transcripts
             .par_iter()
@@ -101,7 +105,7 @@ impl BatchTranscript {
                     .output_json_setup::<E>(folder)
                     .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
             })?;
-        spinner.finish_with_message("All ceremony outputs saved to ${path}!");
+        spinner.finish_with_message(format!("All ceremony outputs saved to {}!", folder));
         Ok(())
     }
 }

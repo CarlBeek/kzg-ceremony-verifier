@@ -5,7 +5,7 @@ pub trait ErrorCode {
     fn to_error_code(&self) -> String;
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Error, IntoStaticStr)]
+#[derive(Debug, Error, IntoStaticStr)]
 pub enum CeremoniesError {
     #[error("Unexpected number of contributions: expected {0}, got {1}")]
     UnexpectedNumContributions(usize, usize),
@@ -23,7 +23,7 @@ impl ErrorCode for CeremoniesError {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Error, IntoStaticStr)]
+#[derive( Debug, Error, IntoStaticStr)]
 pub enum CeremonyError {
     #[error("Unsupported number of G1 powers: {0}")]
     UnsupportedNumG1Powers(usize),
@@ -83,6 +83,10 @@ pub enum CeremonyError {
     ContributionNoEntropy,
     #[error("Mismatch in witness length: {0} products and {1} pubkeys")]
     WitnessLengthMismatch(usize, usize),
+    #[error("json error: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("{0}")]
+    Io(#[from] std::io::Error)
 }
 
 impl ErrorCode for CeremonyError {

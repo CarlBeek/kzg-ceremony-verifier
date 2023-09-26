@@ -231,7 +231,6 @@ impl Engine for BLST {
 
     fn get_lagrange_g1(points: &[G1]) -> Result<Vec<G1>, CeremonyError> {
         let domain = compute_roots_of_unity(points.len(), fr_from_u64(Self::PRIMITIVE_ROOT_OF_UNITY));
-        println!("Roost of unity: {:?}", domain[1]);
         let points_p1: Result<Vec<blst_p1>, ParseError> = points
             .par_iter()
             .map(|&p| blst_p1_affine::try_from(p).map(|p| p1_from_affine(&p)))
@@ -305,7 +304,6 @@ fn compute_root_of_unity(length: usize, primitive_root: blst_fr) -> blst_fr {
 
 fn compute_roots_of_unity(num_roots: usize, primitive_root: blst_fr) -> Vec<blst_fr> {
     let root_of_unity = compute_root_of_unity(num_roots, primitive_root);
-    println!("Root of unity: {:?}", root_of_unity);
     let mut roots = Vec::new();
     let mut current_root_of_unity = fr_one();
     for _ in 0..num_roots {
