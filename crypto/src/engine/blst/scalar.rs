@@ -72,26 +72,36 @@ pub fn fr_div(a: &blst_fr, b: &blst_fr) -> blst_fr {
 }
 
 pub fn fr_is_odd(a: &blst_fr) -> bool {
-    
-    a.l[0] & 1 == 1
+    let lower_64 = u64_from_fr(a);
+    lower_64 & 1 == 1
 }
 
-pub fn fr_exp(a: &blst_fr, pow: &blst_fr) -> blst_fr {
-    dbg!(&a, &pow);
-    let mut result = blst_fr::default();
-    let mut base = *a;
-    let mut n = pow.clone(); // Introduce a new variable to hold the updated value of `n`
-
-    // Perform square and multiply algorithm
-    while n.ne(&fr_zero()) {
-        if fr_is_odd(&n) {
-            unsafe { blst_fr_mul(&mut result, &result, &base); }
-        }
-        // Square and shift
-        unsafe { blst_fr_mul(&mut base, &base, &base); }
-        unsafe { blst_fr_rshift(&mut n, &n, 1) }
+pub fn fr_exp(x: &blst_fr, n: &blst_fr) -> blst_fr {
+    let zero = fr_from_u64(0);
+    let one = fr_from_u64(1);
+    if n == &zero {
+        return one;
     }
-    result
+
+    let mut n = n.clone();
+    let mut x = x.clone();
+    let mut y = fr_from_u64(1);
+    while n != one {
+        if fr_is_odd(&n) {
+            unsafe {
+                blst_fr_mul(&mut y, &x, &y);
+                blst_fr_sub(&mut n, &n, &one);
+            }
+        }
+        unsafe {
+            blst_fr_mul(&mut x, &x, &x);
+            blst_fr_rshift(&mut n, &n, 1);
+        }
+    }
+    unsafe {
+        blst_fr_mul(&mut y, &x, &y);
+    }
+    y
 }
 
 #[allow(dead_code)] // Currently only used in tests
@@ -138,11 +148,11 @@ pub fn fr_from_u64(a: u64) -> blst_fr {
 }
 
 pub fn u64_from_fr(a: &blst_fr) -> u64 {
-    let mut ret = 0u64;
+    let mut ret = [0u64; 4];
     unsafe {
-        blst_uint64_from_fr(&mut ret, a);
+        blst_uint64_from_fr(ret.as_mut_ptr(), a);
     }
-    ret
+    ret[0]
 }
 
 impl From<&F> for blst_scalar {
@@ -209,9 +219,7 @@ pub mod tests {
     #[test]
     fn test_fr_is_odd() {
         for a in 0..128 {
-            let mut fr = blst_fr::default();
-            fr.l[0] = a;
-
+            let  fr = fr_from_u64(a);
             let is_odd = fr_is_odd(&fr);
 
             assert_eq!(is_odd, a % 2 != 0);
@@ -220,10 +228,17 @@ pub mod tests {
 
     #[test]
     fn test_fr_exp() {
-        let base = fr_from_u64(2);
-        let exp = fr_from_u64(3);
-        let result = fr_from_u64(8);
-        assert_eq!(fr_exp(&base, &exp), result);
-
+        for (base, exp, result) in [
+            (2234234, 0, 1),
+            (2, 1, 2),
+            (2, 3, 8),
+            (4294967261, 2, 18446743773061842121),
+            (5, 27, 7450580596923828125),
+        ] {
+            let base = fr_from_u64(base);
+            let exp = fr_from_u64(exp);
+            let result = fr_from_u64(result);
+            assert_eq!(fr_exp(&base, &exp), result);
+        }
     }
 }
