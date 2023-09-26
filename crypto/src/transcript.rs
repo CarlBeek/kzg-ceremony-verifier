@@ -150,8 +150,8 @@ impl Transcript {
     pub fn output_json_setup<E: Engine>(&self, folder: &str) -> Result<(), CeremonyError> {
         let g1_lagrange = E::get_lagrange_g1(&self.powers.g1)?;
         let json = OutputJson {
-            G1_lagrange: g1_lagrange,
-            G2_monomial: self.powers.g2.clone(),
+            g1_lagrange: g1_lagrange,
+            g2_monomial: self.powers.g2.clone(),
         };
 
         let file_path = PathBuf::from(folder).join(format!("trusted_setup_{}.json", self.powers.g1.len()));

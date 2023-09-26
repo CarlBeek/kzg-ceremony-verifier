@@ -1,4 +1,4 @@
-use std::{fs, fmt::format, path};
+use std::fs;
 
 use crate::{
     signature::{identity::Identity, EcdsaSignature},
@@ -66,7 +66,7 @@ impl BatchTranscript {
                     .verify_powers::<E>(*num_g1, *num_g2)
                     .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
             })?;
-        spinner.finish_with_message("Powers of Tau verified!");
+        spinner.finish_with_message("Powers of Tau verified");
         Ok(())
     }
 
@@ -86,14 +86,12 @@ impl BatchTranscript {
                     .verify_witnesses::<E>()
                     .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
             })?;
-        spinner.finish_with_message("All contributions verified!");
+        spinner.finish_with_message("All contributions verified");
         Ok(())
     }
 
 
     pub fn output_json_setups<E: Engine>(&self, folder: &str) -> Result<(), CeremoniesError> {
-        let spinner = create_spinner();
-        spinner.set_message("Outputting JSON setups...");
         // Create output folder if it doesn't exist
         fs::create_dir_all(&folder).unwrap();
         // Verify transcripts in parallel
@@ -105,7 +103,6 @@ impl BatchTranscript {
                     .output_json_setup::<E>(folder)
                     .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
             })?;
-        spinner.finish_with_message(format!("All ceremony outputs saved to {}!", folder));
         Ok(())
     }
 }
