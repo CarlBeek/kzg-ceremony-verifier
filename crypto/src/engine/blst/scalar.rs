@@ -1,6 +1,6 @@
 use crate::F;
 use blst::{
-    blst_fr, blst_fr_add, blst_fr_from_scalar, blst_fr_mul, blst_fr_sub, blst_fr_inverse, blst_keygen, blst_lendian_from_scalar,
+    blst_fr, blst_fr_add, blst_fr_from_scalar, blst_fr_mul, blst_fr_sub, blst_fr_inverse, blst_fr_from_uint64, blst_keygen, blst_lendian_from_scalar,
     blst_scalar, blst_scalar_from_fr, blst_scalar_from_lendian, blst_scalar_from_uint64, blst_uint64_from_fr, blst_fr_rshift,
 };
 use rand::{Rng, SeedableRng};
@@ -72,11 +72,12 @@ pub fn fr_div(a: &blst_fr, b: &blst_fr) -> blst_fr {
 }
 
 pub fn fr_is_odd(a: &blst_fr) -> bool {
-    let truncated_a = u64_from_fr(a);
-    truncated_a & 1 == 1
+    
+    a.l[0] & 1 == 1
 }
 
 pub fn fr_exp(a: &blst_fr, pow: &blst_fr) -> blst_fr {
+    dbg!(&a, &pow);
     let mut result = blst_fr::default();
     let mut base = *a;
     let mut n = pow.clone(); // Introduce a new variable to hold the updated value of `n`
@@ -86,10 +87,9 @@ pub fn fr_exp(a: &blst_fr, pow: &blst_fr) -> blst_fr {
         if fr_is_odd(&n) {
             unsafe { blst_fr_mul(&mut result, &result, &base); }
         }
-        
         // Square and shift
         unsafe { blst_fr_mul(&mut base, &base, &base); }
-        unsafe { blst_fr_rshift(&mut n, &n.clone(), 1) }
+        unsafe { blst_fr_rshift(&mut n, &n, 1) }
     }
     result
 }
@@ -129,8 +129,12 @@ pub fn scalar_from_u64(a: u64) -> blst_scalar {
 }
 
 pub fn fr_from_u64(a: u64) -> blst_fr {
-    let scalar = scalar_from_u64(a);
-    fr_from_scalar(&scalar)
+    let mut fr = blst_fr::default();
+    let input = [a, 0, 0, 0];
+    unsafe {
+        blst_fr_from_uint64(&mut fr, input.as_ptr());
+    }
+    fr
 }
 
 pub fn u64_from_fr(a: &blst_fr) -> u64 {
@@ -195,5 +199,31 @@ impl Zeroize for Scalar {
 impl From<blst_scalar> for Scalar {
     fn from(s: blst_scalar) -> Self {
         Self(s)
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fr_is_odd() {
+        for a in 0..128 {
+            let mut fr = blst_fr::default();
+            fr.l[0] = a;
+
+            let is_odd = fr_is_odd(&fr);
+
+            assert_eq!(is_odd, a % 2 != 0);
+        }
+    }
+
+    #[test]
+    fn test_fr_exp() {
+        let base = fr_from_u64(2);
+        let exp = fr_from_u64(3);
+        let result = fr_from_u64(8);
+        assert_eq!(fr_exp(&base, &exp), result);
+
     }
 }

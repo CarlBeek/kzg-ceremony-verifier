@@ -18,7 +18,7 @@ pub use crate::{
     engine::{Engine, Entropy, Secret, Tau},
     error::{CeremoniesError, CeremonyError, ErrorCode, ParseError},
     group::{F, G1, G2},
-    powers::Powers,
+    powers::{OutputJson, Powers},
     signature::identity::Identity,
     spinner::create_spinner,
     transcript::Transcript,

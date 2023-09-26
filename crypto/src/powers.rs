@@ -70,6 +70,14 @@ impl Powers {
     }
 }
 
+
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OutputJson {
+    pub g1_lagrange: Vec<G1>,
+    pub g2_monomial: Vec<G2>,
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;

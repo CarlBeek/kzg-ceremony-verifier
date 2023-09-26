@@ -1,5 +1,8 @@
-use super::{CeremonyError, Powers, G1, G2};
+use super::{CeremonyError, Powers, G1, G2, OutputJson};
 use crate::{engine::Engine, signature::BlsSignature};
+use std::fs::File;
+use std::io::BufWriter;
+use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use rayon::iter::{ParallelIterator, IntoParallelRefIterator, IndexedParallelIterator};
 
@@ -143,22 +146,36 @@ impl Transcript {
         }
         Ok(())
     }
+
+    pub fn output_json_setup<E: Engine>(&self, folder: &str) -> Result<(), CeremonyError> {
+        println!("calculating lagrange for {}", self.powers.g1.len());
+        let g1_lagrange = E::get_lagrange_g1(&self.powers.g1)?;
+        let json = OutputJson {
+            g1_lagrange: g1_lagrange,
+            g2_monomial: self.powers.g2.clone(),
+        };
+
+        let file_path = PathBuf::from(folder).join("trusted_setup_{self.powers.g1.len()}.json");
+        let file = File::create(file_path).unwrap();
+        let writer = BufWriter::new(file);
+        serde_json::to_writer_pretty(writer, &json).unwrap();
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        CeremonyError::{
-            G1PairingFailed, G2PairingFailed, InvalidG1Power, InvalidG2Power, PubKeyPairingFailed,
-            UnexpectedNumG1Powers, UnexpectedNumG2Powers,
-        },
-        DefaultEngine,
-        ParseError::InvalidSubgroup,
-    };
-    use ark_bls12_381::{Fr, G1Affine, G2Affine};
-    use ark_ec::{AffineCurve, ProjectiveCurve};
-    use hex_literal::hex;
+    // use crate::{
+    //     CeremonyError::{
+    //         G1PairingFailed, G2PairingFailed, InvalidG1Power, InvalidG2Power, PubKeyPairingFailed,
+    //         UnexpectedNumG1Powers, UnexpectedNumG2Powers,
+    //     },
+    //     ParseError::InvalidSubgroup,
+    // };
+    // use ark_bls12_381::{Fr, G1Affine, G2Affine};
+    // use ark_ec::{AffineCurve, ProjectiveCurve};
+    // use hex_literal::hex;
 
     #[test]
     fn transcript_json() {

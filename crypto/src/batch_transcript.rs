@@ -87,4 +87,21 @@ impl BatchTranscript {
         spinner.finish_with_message("All contributions verified!");
         Ok(())
     }
+
+
+    pub fn output_json_setups<E: Engine>(&self, folder: &str) -> Result<(), CeremoniesError> {
+        let spinner = create_spinner();
+        spinner.set_message("Outputting JSON setups...");
+        // Verify transcripts in parallel
+        self.transcripts
+            .par_iter()
+            .enumerate()
+            .try_for_each(|(i, transcript)| {
+                transcript
+                    .output_json_setup::<E>(folder)
+                    .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
+            })?;
+        spinner.finish_with_message("All ceremony outputs saved to ${path}!");
+        Ok(())
+    }
 }

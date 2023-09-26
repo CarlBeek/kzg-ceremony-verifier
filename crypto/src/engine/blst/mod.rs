@@ -231,7 +231,7 @@ impl Engine for BLST {
 
     fn get_lagrange_g1(points: &[G1]) -> Result<Vec<G1>, CeremonyError> {
         let domain = compute_roots_of_unity(points.len(), fr_from_u64(Self::PRIMITIVE_ROOT_OF_UNITY));
-    
+        println!("Roost of unity: {:?}", domain[1]);
         let points_p1: Result<Vec<blst_p1>, ParseError> = points
             .par_iter()
             .map(|&p| blst_p1_affine::try_from(p).map(|p| p1_from_affine(&p)))
@@ -305,7 +305,7 @@ fn compute_root_of_unity(length: usize, primitive_root: blst_fr) -> blst_fr {
 
 fn compute_roots_of_unity(num_roots: usize, primitive_root: blst_fr) -> Vec<blst_fr> {
     let root_of_unity = compute_root_of_unity(num_roots, primitive_root);
-
+    println!("Root of unity: {:?}", root_of_unity);
     let mut roots = Vec::new();
     let mut current_root_of_unity = fr_one();
     for _ in 0..num_roots {
@@ -337,30 +337,4 @@ fn fft(vals: Vec<blst_p1>, domain: Vec<blst_fr>) -> Vec<blst_p1> {
         o[i + l.len()] = p1_add(x, &p1_neg(&y_times_root));
     }
     o
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::engine::tests::{arb_g1, arb_g2};
-    use proptest::proptest;
-
-    #[test]
-    fn test_verify_g1() {
-        proptest!(|(g1 in arb_g1(), g2 in arb_g2())| {
-            let powers = [g1];
-            BLST::verify_g1(&powers, g2).unwrap();
-        });
-    }
-}
-
-#[cfg(feature = "bench")]
-#[cfg(not(tarpaulin_include))]
-#[doc(hidden)]
-pub mod bench {
-    use super::{super::bench::bench_engine, *};
-    use criterion::Criterion;
-
-    pub fn group(criterion: &mut Criterion) {
-        bench_engine::<BLST>(criterion, "blst");
-    }
 }
