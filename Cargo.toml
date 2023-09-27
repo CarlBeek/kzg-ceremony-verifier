@@ -14,9 +14,8 @@ members = [
 ]
 
 [dependencies]
-ark-serialize = { version = "0.3" }
 eyre = "0.6.8"
 indicatif = "0.16"
-kzg-ceremony-crypto = { path = "./crypto", features = ["blst"]}
+kzg-ceremony-crypto = { path = "./crypto"}
 serde_json = "1.0.87"
 

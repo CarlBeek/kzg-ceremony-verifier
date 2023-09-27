@@ -1,37 +1,10 @@
 use crate::F;
 use blst::{
-    blst_fr, blst_fr_add, blst_fr_from_scalar, blst_fr_mul, blst_fr_sub, blst_fr_inverse, blst_fr_from_uint64, blst_keygen, blst_lendian_from_scalar,
+    blst_fr, blst_fr_add, blst_fr_from_scalar, blst_fr_mul, blst_fr_sub, blst_fr_inverse, blst_fr_from_uint64, blst_lendian_from_scalar,
     blst_scalar, blst_scalar_from_fr, blst_scalar_from_lendian, blst_scalar_from_uint64, blst_uint64_from_fr, blst_fr_rshift,
 };
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha20Rng;
 use std::ops::Deref;
 use zeroize::Zeroize;
-
-pub fn random_fr(entropy: [u8; 32]) -> blst_fr {
-    // Use ChaCha20 CPRNG
-    let mut rng = ChaCha20Rng::from_seed(entropy);
-
-    // Generate tau by reducing 512 bits of entropy modulo prime.
-    let mut buffer = [0u8; 64];
-    rng.fill(&mut buffer);
-
-    let mut scalar = blst_scalar::default();
-    let mut ret = blst_fr::default();
-
-    unsafe {
-        blst_keygen(
-            &mut scalar,
-            buffer.as_ptr(),
-            buffer.len(),
-            [0; 0].as_ptr(),
-            0,
-        );
-        blst_fr_from_scalar(&mut ret, &scalar);
-    }
-
-    ret
-}
 
 #[allow(dead_code)] // Currently only used in tests
 pub fn fr_add(a: &blst_fr, b: &blst_fr) -> blst_fr {

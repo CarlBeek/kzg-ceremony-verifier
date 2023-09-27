@@ -2,7 +2,7 @@ use std::fs;
 
 use crate::{
     signature::{identity::Identity, EcdsaSignature},
-    CeremoniesError, Engine, create_spinner, Transcript,
+    CeremoniesError, create_spinner, Transcript,
 };
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -38,19 +38,19 @@ impl BatchTranscript {
     }
 
 
-    pub fn verify_self<E: Engine>(
+    pub fn verify_self(
         &self,
         sizes: Vec<(usize, usize)>,
     ) -> Result<(), CeremoniesError> {
-        self.verify_powers::<E>(sizes)?;
-        self.verify_witnesses::<E>()?;
+        self.verify_powers(sizes)?;
+        self.verify_witnesses()?;
         Ok(())
     }
 
     // Verifies the PoT of all the transcripts
     // given a vector of expected (num_g1, num_g2) points
     #[instrument(level = "info", skip_all, fields(n=self.transcripts.len()))]
-    pub fn verify_powers<E: Engine>(
+    pub fn verify_powers(
         &self,
         sizes: Vec<(usize, usize)>,
     ) -> Result<(), CeremoniesError> {
@@ -63,7 +63,7 @@ impl BatchTranscript {
             .enumerate()
             .try_for_each(|(i, (transcript, (num_g1, num_g2)))| {
                 transcript
-                    .verify_powers::<E>(*num_g1, *num_g2)
+                    .verify_powers(*num_g1, *num_g2)
                     .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
             })?;
         spinner.finish_with_message("Powers of Tau verified");
@@ -72,7 +72,7 @@ impl BatchTranscript {
 
     // Verifies witnesses are valid for all the transcripts
     #[instrument(level = "info", skip_all, fields(n=self.transcripts.len()))]
-    pub fn verify_witnesses<E: Engine>(
+    pub fn verify_witnesses(
         &self,
     ) -> Result<(), CeremoniesError> {
         let spinner = create_spinner();
@@ -83,7 +83,7 @@ impl BatchTranscript {
             .enumerate()
             .try_for_each(|(i, transcript)| {
                 transcript
-                    .verify_witnesses::<E>()
+                    .verify_witnesses()
                     .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
             })?;
         spinner.finish_with_message("All contributions verified");
@@ -91,7 +91,7 @@ impl BatchTranscript {
     }
 
 
-    pub fn output_json_setups<E: Engine>(&self, folder: &str) -> Result<(), CeremoniesError> {
+    pub fn output_json_setups(&self, folder: &str) -> Result<(), CeremoniesError> {
         // Create output folder if it doesn't exist
         fs::create_dir_all(&folder).unwrap();
         // Verify transcripts in parallel
@@ -100,7 +100,7 @@ impl BatchTranscript {
             .enumerate()
             .try_for_each(|(i, transcript)| {
                 transcript
-                    .output_json_setup::<E>(folder)
+                    .output_json_setup(folder)
                     .map_err(|e| CeremoniesError::InvalidCeremony(i, e))
             })?;
         Ok(())

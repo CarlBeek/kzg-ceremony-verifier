@@ -3,21 +3,20 @@
 use crate::hex_format::{bytes_to_hex, hex_to_bytes};
 use hex_literal::hex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use zeroize::Zeroize;
 
 /// A scalar field element.
 /// Encoding as little-endian 32-byte array.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Zeroize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct F(pub [u8; 32]);
 
 /// A G1 curve point.
 /// Encoded in compressed ZCash format.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Zeroize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct G1(pub [u8; 48]);
 
 /// A G2 curve point.
 /// Encoded in compressed ZCash format.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Zeroize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct G2(pub [u8; 96]);
 
 impl F {

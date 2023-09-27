@@ -2,7 +2,7 @@ use crate::{ParseError, G2};
 use blst::{
     blst_p2, blst_p2_affine, blst_p2_affine_compress, blst_p2_affine_in_g2, blst_p2_from_affine,
     blst_p2_mult, blst_p2_to_affine, blst_p2_uncompress, blst_p2s_mult_pippenger,
-    blst_p2s_mult_pippenger_scratch_sizeof, blst_p2s_to_affine, blst_scalar, limb_t, BLST_ERROR,
+    blst_p2s_mult_pippenger_scratch_sizeof, blst_scalar, limb_t, BLST_ERROR,
 };
 use std::{mem::size_of, ptr};
 
@@ -56,18 +56,6 @@ pub fn p2_mult(p: &blst_p2, s: &blst_scalar) -> blst_p2 {
 
 pub fn p2_affine_in_g2(p: &blst_p2_affine) -> bool {
     unsafe { blst_p2_affine_in_g2(p) }
-}
-
-pub fn p2s_to_affine(ps: &[blst_p2]) -> Vec<blst_p2_affine> {
-    let input = ps.iter().map(|x| x as *const blst_p2).collect::<Vec<_>>();
-    let mut out = Vec::<blst_p2_affine>::with_capacity(ps.len());
-
-    unsafe {
-        blst_p2s_to_affine(out.as_mut_ptr(), input.as_ptr(), ps.len());
-        out.set_len(ps.len());
-    }
-
-    out
 }
 
 pub fn p2s_mult_pippenger(bases: &[blst_p2_affine], scalars: &[blst_scalar]) -> blst_p2_affine {

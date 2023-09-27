@@ -7,8 +7,9 @@ pub mod identity;
 use crate::{
     hex_format::{bytes_to_hex, optional_hex_to_bytes},
     signature::identity::Identity,
-    Engine, Tau, G1, G2,
+    G1, G2,
 };
+use crate::bls;
 use ethers_core::types::{
     transaction::eip712::{EIP712Domain, Eip712, Eip712Error, TypedData},
     Signature as EthSignature,
@@ -26,19 +27,14 @@ impl BlsSignature {
     }
 
     #[must_use]
-    pub fn prune<E: Engine>(&self, message: &[u8], pk: G2) -> Self {
+    pub fn prune(&self, message: &[u8], pk: G2) -> Self {
         Self(self.0.and_then(|sig| {
-            if E::verify_signature(sig, message, pk) {
+            if bls::verify_signature(sig, message, pk) {
                 Some(sig)
             } else {
                 None
             }
         }))
-    }
-
-    #[must_use]
-    pub fn sign<E: Engine>(message: &[u8], sk: &Tau) -> Self {
-        Self(E::sign_message(sk, message))
     }
 }
 

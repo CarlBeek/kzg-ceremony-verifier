@@ -1,5 +1,6 @@
 use super::{CeremonyError, Powers, G1, G2, OutputJson};
-use crate::{engine::Engine, signature::BlsSignature};
+use crate::signature::BlsSignature;
+use crate::bls;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::PathBuf;
@@ -61,7 +62,7 @@ impl Transcript {
     }
 
     // Verifies the Powers of Tau are correctly constructed
-    pub fn verify_powers<E: Engine>(
+    pub fn verify_powers(
         &self,
         num_g1: usize,
         num_g2: usize,
@@ -87,8 +88,8 @@ impl Transcript {
         }
 
         // Point sanity checks (encoding and subgroup checks).
-        E::validate_g1(&self.powers.g1)?;
-        E::validate_g2(&self.powers.g2)?;
+        bls::validate_g1(&self.powers.g1)?;
+        bls::validate_g2(&self.powers.g2)?;
 
         // Non-zero checks
         if self
@@ -100,13 +101,13 @@ impl Transcript {
             return Err(CeremonyError::ZeroPubkey);
         }
         // Verify powers are correctly constructed
-        E::verify_g1(&self.powers.g1, self.powers.g2[1])?;
-        E::verify_g2(&self.powers.g1[..self.powers.g2.len()], &self.powers.g2)?;
+        bls::verify_g1(&self.powers.g1, self.powers.g2[1])?;
+        bls::verify_g2(&self.powers.g1[..self.powers.g2.len()], &self.powers.g2)?;
 
         Ok(())
     }
 
-    pub fn verify_witnesses<E: Engine>(
+    pub fn verify_witnesses(
         &self,
     ) -> Result<(), CeremonyError> {
         // Sanity checks on num pubkeys & products
@@ -118,8 +119,8 @@ impl Transcript {
         }
 
         // Point sanity checks (encoding and subgroup checks).
-        E::validate_g1(&self.witness.products)?;
-        E::validate_g2(&self.witness.pubkeys)?;
+        bls::validate_g1(&self.witness.products)?;
+        bls::validate_g2(&self.witness.pubkeys)?;
 
         // Pairing check all pubkeys
         // TODO: figure out how to do this with some kind of batched pairings
@@ -130,7 +131,7 @@ impl Transcript {
             .enumerate()
             .filter(|(i, _)| i >=  &self.witness.products.len())
             .any(|(i, product)|
-                E::verify_pubkey(
+                bls::verify_pubkey(
                     *product,
                     self.witness.products[i - 1],
                     self.witness.pubkeys[i],
@@ -147,8 +148,8 @@ impl Transcript {
         Ok(())
     }
 
-    pub fn output_json_setup<E: Engine>(&self, folder: &str) -> Result<(), CeremonyError> {
-        let g1_lagrange = E::get_lagrange_g1(&self.powers.g1)?;
+    pub fn output_json_setup(&self, folder: &str) -> Result<(), CeremonyError> {
+        let g1_lagrange = bls::get_lagrange_g1(&self.powers.g1)?;
         let json = OutputJson {
             g1_lagrange: g1_lagrange,
             g2_monomial: self.powers.g2.clone(),

@@ -1,8 +1,6 @@
 use eyre::Result;
-use std::{fs::File, path::Path};
-use ark_serialize::Read;
+use std::{fs::File, path::Path, io::Read};
 use kzg_ceremony_crypto::{
-    BLST,
     BatchTranscript,
     create_spinner,
 };
@@ -28,7 +26,7 @@ pub fn load_transcript(path: &str) -> Result<BatchTranscript> {
 }
 
 pub fn verify_transcript(batch_transcript: &BatchTranscript, ceremony_sizes: Vec<(usize, usize)>) -> Result<()> {
-    let result = batch_transcript.verify_self::<BLST>(ceremony_sizes);
+    let result = batch_transcript.verify_self(ceremony_sizes);
 
     match result {
         Ok(_) => {
@@ -46,7 +44,7 @@ pub fn verify_transcript(batch_transcript: &BatchTranscript, ceremony_sizes: Vec
 pub fn save_individual_setups(batch_transcript: &BatchTranscript, folder: &str) -> Result<()> {
     let spinner = create_spinner();
     spinner.set_message("Saving individual setups...");
-    batch_transcript.output_json_setups::<BLST>(folder).unwrap();
+    batch_transcript.output_json_setups(folder).unwrap();
     spinner.finish_with_message("Individual setups saved.");
     Ok(())
 }
