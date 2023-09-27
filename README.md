@@ -9,8 +9,8 @@ This is a tool for verifying the output of the Ethereum KZG Ceremony as well as 
 Clone the repository and navigate to its directory:
 
 ```bash
-git clone https://github.com/yourusername/trusted-setup-verifier.git
-cd trusted-setup-verifier
+git clone git@github.com:CarlBeek/kzg-ceremony-verifier.git
+cd kzg-ceremony-verifier
 ```
 
 Build the project:
