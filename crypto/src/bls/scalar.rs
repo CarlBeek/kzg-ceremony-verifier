@@ -4,7 +4,6 @@ use blst::{
     blst_scalar, blst_scalar_from_fr, blst_scalar_from_lendian, blst_scalar_from_uint64, blst_uint64_from_fr, blst_fr_rshift,
 };
 use std::ops::Deref;
-use zeroize::Zeroize;
 
 #[allow(dead_code)] // Currently only used in tests
 pub fn fr_add(a: &blst_fr, b: &blst_fr) -> blst_fr {
@@ -140,7 +139,6 @@ impl From<&F> for blst_scalar {
 
 impl From<&F> for blst_fr {
     fn from(n: &F) -> Self {
-        // TODO: Zeroize the temps
         let mut scalar = blst_scalar::default();
         let mut ret = Self::default();
         unsafe {
@@ -170,12 +168,6 @@ impl Deref for Scalar {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl Zeroize for Scalar {
-    fn zeroize(&mut self) {
-        self.0.b.zeroize();
     }
 }
 

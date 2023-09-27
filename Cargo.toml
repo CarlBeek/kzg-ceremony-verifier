@@ -17,5 +17,6 @@ members = [
 eyre = "0.6.8"
 indicatif = "0.16"
 kzg-ceremony-crypto = { path = "./crypto"}
+reqwest = { version = "0.11", features = ["blocking", "json"] }
 serde_json = "1.0.87"
 
