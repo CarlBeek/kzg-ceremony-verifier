@@ -1,9 +1,21 @@
 use eyre::Result;
-use std::{fs::File, path::Path, io::Read};
+use reqwest;
+use std::{fs::File, path::Path, io::{Read, Write}};
 use kzg_ceremony_crypto::{
     BatchTranscript,
     create_spinner,
 };
+
+
+pub fn download_transcript(path: &str, url: &str) -> Result<()> {
+    let spinner = create_spinner();
+    spinner.set_message("Downloading transcript...");
+    let res = reqwest::blocking::get(url)?;
+    let mut file = File::create(path)?;
+    file.write_all(&res.bytes()?)?;
+    spinner.finish_with_message("Transcript downloaded.");
+    Ok(())
+}
 
 
 fn read_json_file(string_path: &str) -> Result<String> {
