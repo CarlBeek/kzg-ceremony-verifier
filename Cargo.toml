@@ -14,6 +14,7 @@ members = [
 ]
 
 [dependencies]
+clap = "2.33"
 eyre = "0.6.8"
 indicatif = "0.16"
 kzg-ceremony-crypto = { path = "./crypto"}

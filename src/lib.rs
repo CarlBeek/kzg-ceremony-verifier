@@ -8,12 +8,14 @@ use kzg_ceremony_crypto::{
 
 
 pub fn download_transcript(path: &str, url: &str) -> Result<()> {
-    let spinner = create_spinner();
-    spinner.set_message("Downloading transcript...");
-    let res = reqwest::blocking::get(url)?;
-    let mut file = File::create(path)?;
-    file.write_all(&res.bytes()?)?;
-    spinner.finish_with_message("Transcript downloaded.");
+    if !Path::new(path).exists() {
+        let spinner = create_spinner();
+        spinner.set_message("Downloading transcript...");
+        let res = reqwest::blocking::get(url)?;
+        let mut file = File::create(path)?;
+        file.write_all(&res.bytes()?)?;
+        spinner.finish_with_message("Transcript downloaded.");
+    }
     Ok(())
 }
 
