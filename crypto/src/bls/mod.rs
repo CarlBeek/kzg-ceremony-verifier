@@ -3,7 +3,7 @@ mod g2;
 mod scalar;
 
 use self::{
-    g1::{p1_affine_in_g1, p1_from_affine, p1_add, p1_neg, p1_mult, p1s_mult_pippenger},
+    g1::{p1_affine_in_g1, p1_from_affine, p1_add, p1_sub, p1_mult, p1s_mult_pippenger},
     g2::{p2_affine_in_g2, p2_from_affine, p2_mult, p2_to_affine},
     scalar::{fr_from_scalar, fr_sub, fr_mul, fr_div, fr_exp, fr_zero, fr_one, scalar_from_fr, fr_from_u64, fr_inv},
 };
@@ -190,30 +190,6 @@ pub fn verify_signature(sig: G1, message: &[u8], pk: G2) -> bool {
     result == BLST_ERROR::BLST_SUCCESS
 }
 
-pub fn get_lagrange_g1(points: &[G1]) -> Result<Vec<G1>, CeremonyError> {
-    let domain = compute_roots_of_unity(points.len(), fr_from_u64(PRIMITIVE_ROOT_OF_UNITY));
-    let points_p1: Result<Vec<blst_p1>, ParseError> = points
-        .par_iter()
-        .map(|&p| blst_p1_affine::try_from(p).map(|p| p1_from_affine(&p)))
-        .collect();
-
-    let points_p1 = points_p1.map_err(|err| CeremonyError::from(err));
-
-    let fft_output = fft(points_p1?, domain);
-
-    let inv_length = fr_inv(&&fr_from_u64(points.len() as u64));
-
-    let result: Result<Vec<G1>, CeremonyError> = fft_output
-        .iter()
-        .map(|point| {
-            let res_point = p1_mult(&point, &scalar_from_fr(&inv_length));
-            G1::try_from(p1_to_affine(&res_point)).map_err(|err| CeremonyError::from(err))
-        })
-        .collect();
-
-    result
-}
-
 fn pairing(p: &blst_p1_affine, q: &blst_p2_affine) -> blst_fp12 {
     let mut tmp = blst_fp12::default();
     unsafe { blst_miller_loop(&mut tmp, q, p) };
@@ -283,7 +259,75 @@ fn fft(vals: Vec<blst_p1>, domain: Vec<blst_fr>) -> Vec<blst_p1> {
         let y_times_root = p1_mult(&y, &scalar_from_fr(&domain[i]));
         
         o[i] = p1_add(&x, &y_times_root);
-        o[i + l.len()] = p1_add(x, &p1_neg(&y_times_root));
+        o[i + l.len()] = p1_sub(&x, &y_times_root);
     }
     o
+}
+
+
+pub fn get_lagrange_g1(points: &[G1]) -> Result<Vec<G1>, CeremonyError> {
+    let domain = compute_roots_of_unity(points.len(), fr_from_u64(PRIMITIVE_ROOT_OF_UNITY));
+    let points_p1: Result<Vec<blst_p1>, ParseError> = points
+        .par_iter()
+        .map(|&p| blst_p1_affine::try_from(p).map(|p| p1_from_affine(&p)))
+        .collect();
+
+    let points_p1 = points_p1.map_err(|err| CeremonyError::from(err));
+
+    let fft_output = fft(points_p1?, domain);
+
+    let inv_length = scalar_from_fr(&fr_inv(&&fr_from_u64(points.len() as u64)));
+
+    let result: Result<Vec<G1>, CeremonyError> = fft_output
+        .iter()
+        .map(|point| {
+            let res_point = p1_mult(&point, &inv_length);
+            G1::try_from(p1_to_affine(&res_point)).map_err(|err| CeremonyError::from(err))
+        })
+        .collect();
+
+    result
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::bls::scalar::fr_from_lendian;
+
+    use super::*;
+    use super::super::hex_format::hex_str_to_bytes;
+
+    #[test]
+    fn test_compute_roots_of_unity() {
+        let primitive_root = fr_from_u64(PRIMITIVE_ROOT_OF_UNITY);
+        let expected_roots = vec![
+            fr_from_lendian(&hex_str_to_bytes("0x0100000000000000000000000000000000000000000000000000000000000000").unwrap()),
+            fr_from_lendian(&hex_str_to_bytes("0x000000000000010000000376020003ecd0040376cecc518d0000000000000000").unwrap()),
+            fr_from_lendian(&hex_str_to_bytes("0x00000000fffffffffe5bfeff02a4bd5305d8a10908d83933487d9d2953a7ed73").unwrap()),
+            fr_from_lendian(&hex_str_to_bytes("0x01000000fffffefffe5bfb8900a4ba6734d39e93390be8a5477d9d2953a7ed73").unwrap()),
+        ];
+
+        let roots = compute_roots_of_unity(expected_roots.len(), primitive_root);
+        assert_eq!(roots, expected_roots);
+    }
+
+    #[test]
+    fn test_get_lagrange_g1() {
+        // Values taken from py_spec https://github.com/ethereum/consensus-specs/blob/2ac06c10d31bb91f467214a1f13c0e55bd7ccef5/presets/minimal/trusted_setups/testing_trusted_setups.json
+        let monomials = vec![
+            G1(hex_str_to_bytes("0x97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb").unwrap()),
+            G1(hex_str_to_bytes("0x854262641262cb9e056a8512808ea6864d903dbcad713fd6da8dddfa5ce40d85612c912063ace060ed8c4bf005bab839").unwrap()),
+            G1(hex_str_to_bytes("0x86f708eee5ae0cf40be36993e760d9cb3b2371f22db3209947c5d21ea68e55186b30871c50bf11ef29e5248bf42d5678").unwrap()),
+            G1(hex_str_to_bytes("0x94f9c0bafb23cbbf34a93a64243e3e0f934b57593651f3464de7dc174468123d9698f1b9dfa22bb5b6eb96eae002f29f").unwrap()),
+        ];
+        let expected_lagrange = vec![
+            G1(hex_str_to_bytes("0x91131b2e3c1e5f0b51df8970e67080032f411571b66d301436c46f25bbfddf9ca16756430dc470bdb0d85b47fedcdbc1").unwrap()),
+            G1(hex_str_to_bytes("0x934d35b2a46e169915718b77127b0d4efbacdad7fdde4593af7d21d37ebcb77fe6c8dde6b8a9537854d70ef1f291a585").unwrap()),
+            G1(hex_str_to_bytes("0x9410ca1d0342fe7419f02194281df45e1c1ff42fd8b439de5644cc312815c21ddd2e3eeb63fb807cf837e68b76668bd5").unwrap()),
+            G1(hex_str_to_bytes("0xb163df7e9baeb60f69b6ee5faa538c3a564b62eb8cde6a3616083c8cb2171eedd583c9143e7e916df59bf27da5e024e8").unwrap())
+        ];
+
+        let lagrange = get_lagrange_g1(&monomials).unwrap();
+        assert_eq!(lagrange, expected_lagrange);
+    }
 }

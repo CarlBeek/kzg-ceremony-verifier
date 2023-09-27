@@ -74,6 +74,10 @@ pub fn p1_neg(a: &blst_p1) -> blst_p1 {
     }
 }
 
+pub fn p1_sub(a: &blst_p1, b: &blst_p1) -> blst_p1 {
+    p1_add(&a, &p1_neg(b))
+}
+
 pub fn p1_mult(p: &blst_p1, s: &blst_scalar) -> blst_p1 {
     unsafe {
         let mut out = blst_p1::default();
@@ -131,6 +135,8 @@ pub fn p1s_mult_pippenger(bases: &[blst_p1_affine], scalars: &[blst_scalar]) -> 
 
 #[cfg(test)]
 mod tests {
+    use crate::bls::scalar::scalar_from_u64;
+
     use super::{
         super::scalar::{fr_add, fr_from_scalar, fr_mul, fr_zero, scalar_from_fr},
         *,
@@ -138,6 +144,14 @@ mod tests {
     use blst::blst_scalar_from_lendian;
     use proptest::{arbitrary::any, collection::vec as arb_vec, proptest, strategy::Strategy};
     use ruint::{aliases::U256, uint};
+
+
+    #[test]
+    fn test_p1_sub() {
+        let one = p1_from_affine(&blst_p1_affine::try_from(G1::one()).unwrap());
+        let two = p1_mult(&one, &scalar_from_u64(2));
+        assert_eq!(p1_sub(&two, &one), one);
+    }
 
     pub fn arb_scalar() -> impl Strategy<Value = blst_scalar> {
         any::<U256>().prop_map(|mut n| {

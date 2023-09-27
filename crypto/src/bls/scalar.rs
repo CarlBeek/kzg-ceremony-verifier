@@ -127,6 +127,17 @@ pub fn u64_from_fr(a: &blst_fr) -> u64 {
     ret[0]
 }
 
+#[allow(dead_code)] // only used in tests
+pub fn fr_from_lendian(a: &[u8; 32]) -> blst_fr {
+    let mut scalar = blst_scalar::default();
+    let mut ret = blst_fr::default();
+    unsafe {
+        blst_scalar_from_lendian(&mut scalar, a.as_ptr());
+        blst_fr_from_scalar(&mut ret, &scalar);
+    }
+    ret
+}
+
 impl From<&F> for blst_scalar {
     fn from(n: &F) -> Self {
         let mut out = Self::default();
