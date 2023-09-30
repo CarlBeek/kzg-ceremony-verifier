@@ -1,9 +1,11 @@
 use crate::{ParseError, G1};
 use blst::{
     blst_p1, blst_p1_affine, blst_p1_affine_compress, blst_p1_affine_in_g1, blst_p1_from_affine,
-    blst_p1_add, blst_p1_cneg, blst_p1_mult, blst_p1_to_affine, blst_p1_uncompress, blst_p1s_mult_pippenger,
-    blst_p1s_mult_pippenger_scratch_sizeof, blst_scalar, limb_t, BLST_ERROR,
+    blst_p1_add_or_double, blst_p1_cneg, blst_p1_mult, blst_p1_to_affine, blst_p1_uncompress, blst_p1s_mult_pippenger,
+    blst_p1s_mult_pippenger_scratch_sizeof, blst_scalar, blst_fr, limb_t, BLST_ERROR,
 };
+use crate::bls::scalar::{fr_inv, fr_from_u64, scalar_from_fr};
+
 use std::{mem::size_of, ptr};
 
 impl TryFrom<G1> for blst_p1_affine {
@@ -61,7 +63,7 @@ pub fn p1_to_affine(a: &blst_p1) -> blst_p1_affine {
 pub fn p1_add(a: &blst_p1, b: &blst_p1) -> blst_p1 {
     unsafe {
         let mut out = blst_p1::default();
-        blst_p1_add(&mut out, a, b);
+        blst_p1_add_or_double(&mut out, a, b);
         out
     }
 }
@@ -75,7 +77,7 @@ pub fn p1_neg(a: &blst_p1) -> blst_p1 {
 }
 
 pub fn p1_sub(a: &blst_p1, b: &blst_p1) -> blst_p1 {
-    p1_add(&a, &p1_neg(b))
+    p1_add(&a, &p1_neg(&b))
 }
 
 pub fn p1_mult(p: &blst_p1, s: &blst_scalar) -> blst_p1 {
@@ -133,6 +135,115 @@ pub fn p1s_mult_pippenger(bases: &[blst_p1_affine], scalars: &[blst_scalar]) -> 
     ret
 }
 
+
+fn fft_g1_fast(
+    out: &mut [blst_p1],
+    inp: &[blst_p1],
+    stride: usize,
+    roots: &[blst_fr],
+    roots_stride: usize,
+    n: usize,
+) {
+    let half = n / 2;
+    if half > 0 {
+        fft_g1_fast(&mut out[0..half], &inp[0..], stride * 2, &roots[0..], roots_stride * 2, half);
+        fft_g1_fast(&mut out[half..n], &inp[stride..], stride * 2, &roots[0..], roots_stride * 2, half);
+        
+        for i in 0..half {
+            let y_times_root = p1_mult(&out[i + half], &scalar_from_fr(&roots[i * roots_stride]));
+            
+            out[i + half] = p1_sub(&out[i], &y_times_root);
+            out[i] = p1_add(&out[i], &y_times_root);
+        }
+    } else {
+        out[0] = inp[0];
+    }
+}
+
+
+pub fn p1_fft_inplace(vals: Vec<blst_p1>, roots: Vec<blst_fr>) -> Vec<blst_p1> {
+    let mut ret = vals.clone();
+    fft_g1_fast(&mut ret, &vals, 1, &roots, 1, vals.len());
+    ret
+}
+
+pub fn p1_ifft_inplace(vals: Vec<blst_p1>, roots: Vec<blst_fr>) -> Vec<blst_p1> {
+    let inv_len = scalar_from_fr(&fr_inv(&fr_from_u64(vals.len() as u64)));
+    let reversed_roots = reverse_roots(&roots);
+    let fft_points = p1_fft_inplace(vals, reversed_roots);
+    fft_points.iter().map(|p1| p1_mult(&p1, &inv_len)).collect()
+}
+
+pub fn p1_fft_clone(vals: Vec<blst_p1>, roots: Vec<blst_fr>) -> Vec<blst_p1> {
+    if vals.len() == 1 {
+        return vals;
+    }
+
+    let l_vals: Vec<blst_p1> = vals.iter().step_by(2).cloned().collect();
+    let r_vals: Vec<blst_p1> = vals.iter().skip(1).step_by(2).cloned().collect();
+
+    let l_roots: Vec<blst_fr> = roots.iter().step_by(2).cloned().collect();
+
+    let l = p1_fft_clone(l_vals, l_roots.clone());
+    let r = p1_fft_clone(r_vals, l_roots);
+
+    let mut o = vec![blst_p1::default(); vals.len()];
+    for (i, (x, y)) in l.iter().zip(r.iter()).enumerate() {
+        let y_times_root = p1_mult(&y, &scalar_from_fr(&roots[i]));
+    
+        o[i] = p1_add(&x, &y_times_root);
+        o[i + l.len()] = p1_sub(&x, &y_times_root);
+    }
+    o
+}
+
+pub fn p1_ifft_clone(vals: Vec<blst_p1>, roots: Vec<blst_fr>) -> Vec<blst_p1> {
+    let inv_length = scalar_from_fr(&fr_inv(&fr_from_u64(vals.len() as u64)));
+    let reversed_roots = reverse_roots(&roots);
+    let fft_points = p1_fft_clone(vals, reversed_roots);
+    fft_points.iter().map(|p1| p1_mult(&p1, &inv_length)).collect()
+}
+
+pub fn fft_g1_slow(
+    ret: &mut [blst_p1],
+    data: &[blst_p1],
+    stride: usize,
+    roots: &[blst_fr],
+    roots_stride: usize,
+) {
+    for i in 0..data.len() {
+        // Evaluate first member at 1
+        ret[i] = p1_mult(&data[0], &scalar_from_fr(&roots[0]));
+
+        // Evaluate the rest of members using a step of (i * J) % data.len() over the roots
+        // This distributes the roots over correct x^n members and saves on multiplication
+        for j in 1..data.len() {
+            let v = p1_mult(&data[j * stride], &scalar_from_fr(&(&roots[((i * j) % data.len()) * roots_stride])));
+            ret[i] = p1_add(&ret[i], &v);
+        }
+    }
+}
+
+pub fn p1_fft_slow(vals: Vec<blst_p1>, roots: Vec<blst_fr>) -> Vec<blst_p1> {
+    let mut ret = vals.clone();
+    fft_g1_slow(&mut ret, &vals, 1, &roots, 1);
+    ret
+}
+
+fn reverse_roots(roots: &Vec<blst_fr>) -> Vec<blst_fr> {
+    let mut roots = roots.clone();
+    let (first, rest) = roots.split_at_mut(1);
+    rest.reverse();
+    [first, rest].concat()
+}
+
+pub fn p1_ifft_slow(vals: Vec<blst_p1>, roots: Vec<blst_fr>) -> Vec<blst_p1> {
+    let inv_len = scalar_from_fr(&fr_inv(&fr_from_u64(vals.len() as u64)));
+    let reversed_roots = reverse_roots(&roots);
+    let fft_points = p1_fft_slow(vals, reversed_roots);
+    fft_points.iter().map(|p1| p1_mult(&p1, &inv_len)).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::bls::scalar::scalar_from_u64;
@@ -151,6 +262,15 @@ mod tests {
         let one = p1_from_affine(&blst_p1_affine::try_from(G1::one()).unwrap());
         let two = p1_mult(&one, &scalar_from_u64(2));
         assert_eq!(p1_sub(&two, &one), one);
+    }
+
+    #[test]
+    fn test_p1_sub_dumb() {
+        let zero = blst_p1_affine::try_from(G1::zero()).unwrap();
+        let points = get_random_p1s(1024);
+        for p in points {
+            assert_eq!(zero, p1_to_affine(&p1_sub(&p, &p)));
+        }
     }
 
     pub fn arb_scalar() -> impl Strategy<Value = blst_scalar> {
@@ -190,5 +310,104 @@ mod tests {
                 assert_eq!(p1_from_affine(&result), expected);
             });
         }
+    }
+
+    fn get_random_p1s (n: usize) -> Vec<blst_p1> {
+        let (rand_factors, _) = crate::bls::random_factors(n);
+        let rand_p1s = rand_factors.iter().map(|s| {
+            p1_mult(&p1_from_affine(&blst_p1_affine::try_from(G1::one()).unwrap()), s)
+        }).collect();
+        rand_p1s
+    }
+
+    #[test]
+    fn test_p1_fft_inplace_roundtrip() {
+        const N: usize = 4;
+        let original_p1s = get_random_p1s(N);
+        let roots = crate::bls::compute_roots_of_unity(N, fr_from_u64(crate::bls::PRIMITIVE_ROOT_OF_UNITY));
+        let fft_points = p1_fft_inplace(original_p1s.clone(), roots.clone());
+        let ifft_points = p1_ifft_inplace(fft_points, roots);
+
+        let original_g1s: Vec<G1> = original_p1s.iter().map(|p1| {
+            G1::try_from(p1_to_affine(p1)).unwrap()
+        }).collect();
+
+        let ifft_g1s: Vec<G1> = ifft_points.iter().map(|p1| {
+            G1::try_from(p1_to_affine(p1)).unwrap()
+        }).collect();
+        assert_eq!(original_g1s, ifft_g1s);
+    }
+
+    #[test]
+    fn test_p1_fft_clone_roundtrip() {
+        const N: usize = 4;
+        let original_p1s = get_random_p1s(N);
+        let roots = crate::bls::compute_roots_of_unity(N, fr_from_u64(crate::bls::PRIMITIVE_ROOT_OF_UNITY));
+        let fft_points = p1_fft_clone(original_p1s.clone(), roots.clone());
+        let ifft_points = p1_ifft_clone(fft_points, roots);
+
+        let original_g1s: Vec<G1> = original_p1s.iter().map(|p1| {
+            G1::try_from(p1_to_affine(p1)).unwrap()
+        }).collect();
+
+        let ifft_g1s: Vec<G1> = ifft_points.iter().map(|p1| {
+            G1::try_from(p1_to_affine(p1)).unwrap()
+        }).collect();
+        assert_eq!(original_g1s, ifft_g1s);
+    }
+
+    #[test]
+    fn test_p1_fft_slow_roundtrip() {
+        const N: usize = 4;
+        let original_p1s = get_random_p1s(N);
+        let roots = crate::bls::compute_roots_of_unity(N, fr_from_u64(crate::bls::PRIMITIVE_ROOT_OF_UNITY));
+        let fft_points = p1_fft_slow(original_p1s.clone(), roots.clone());
+        let ifft_points = p1_ifft_slow(fft_points, roots);
+
+        let original_g1s: Vec<G1> = original_p1s.iter().map(|p1| {
+            G1::try_from(p1_to_affine(p1)).unwrap()
+        }).collect();
+
+        let ifft_g1s: Vec<G1> = ifft_points.iter().map(|p1| {
+            G1::try_from(p1_to_affine(p1)).unwrap()
+        }).collect();
+        assert_eq!(original_g1s, ifft_g1s);
+    }
+
+    #[test]
+    fn test_p1_fft_equality_inplace_clone() {
+        const N: usize = 8;
+        let original_p1s = get_random_p1s(N);
+        let roots = crate::bls::compute_roots_of_unity(N, fr_from_u64(crate::bls::PRIMITIVE_ROOT_OF_UNITY));
+        let clone_fft_points = p1_fft_clone(original_p1s.clone(), roots.clone());
+        let inplace_fft_points = p1_fft_inplace(original_p1s.clone(), roots.clone());
+
+        let clone_fft_G1s: Vec<G1> = clone_fft_points.iter().map(|p1| {
+            G1::try_from(p1_to_affine(p1)).unwrap()
+        }).collect();
+        let inplace_fft_G1s: Vec<G1> = inplace_fft_points.iter().map(|p1| {
+            G1::try_from(p1_to_affine(p1)).unwrap()
+        }).collect();
+
+        assert_eq!(clone_fft_G1s, inplace_fft_G1s);
+    }
+
+
+    #[test]
+    fn test_p1_fft_equality_inplace_slow() {
+        const N: usize = 8;
+        let original_p1s = get_random_p1s(N);
+        let roots = crate::bls::compute_roots_of_unity(N, fr_from_u64(crate::bls::PRIMITIVE_ROOT_OF_UNITY));
+        let slow_fft_points = p1_fft_slow(original_p1s.clone(), roots.clone());
+        let inplace_fft_points = p1_fft_inplace(original_p1s.clone(), roots.clone());
+
+        let slow_fft_G1s: Vec<G1> = slow_fft_points.iter().map(|p1| {
+            G1::try_from(p1_to_affine(p1)).unwrap()
+        }).collect();
+        let inplace_fft_G1s: Vec<G1> = inplace_fft_points.iter().map(|p1| {
+            G1::try_from(p1_to_affine(p1)).unwrap()
+        }).collect();
+
+        assert_eq!(slow_fft_G1s, inplace_fft_G1s);
     }
 }

@@ -193,6 +193,15 @@ pub mod tests {
     use super::*;
 
     #[test]
+    fn test_fr_inverse() {
+        for a in 1..128 {
+            let  fr = fr_from_u64(a);
+            let inv = fr_inv(&fr);
+            assert_eq!(fr_mul(&fr, &inv), fr_one());
+        }
+    }
+
+    #[test]
     fn test_fr_is_odd() {
         for a in 0..128 {
             let  fr = fr_from_u64(a);
