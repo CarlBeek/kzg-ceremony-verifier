@@ -3,7 +3,7 @@ mod g2;
 mod scalar;
 
 use self::{
-    g1::{p1_affine_in_g1, p1_from_affine, p1_mult, p1s_mult_pippenger, p1_ifft_inplace},
+    g1::{p1_affine_in_g1, p1_from_affine, p1_mult, p1s_mult_pippenger, p1_ifft},
     g2::{p2_affine_in_g2, p2_from_affine, p2_mult, p2_to_affine},
     scalar::{fr_from_scalar, fr_sub, fr_mul, fr_div, fr_exp, fr_zero, fr_one, scalar_from_fr, fr_from_u64},
 };
@@ -250,7 +250,7 @@ pub fn get_lagrange_g1(points: &[G1]) -> Result<Vec<G1>, CeremonyError> {
 
     let points_p1 = points_p1.map_err(|err| CeremonyError::from(err));
 
-    p1_ifft_inplace(points_p1?, domain)
+    p1_ifft(points_p1?, domain)
         .iter()
         .map(|p| G1::try_from(*p).map_err(|err| CeremonyError::from(err)))
         .collect::<Result<Vec<_>, _>>()
