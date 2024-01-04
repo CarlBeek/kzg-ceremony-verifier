@@ -9,7 +9,7 @@ This is a tool for verifying the output of the Ethereum KZG Ceremony as well as 
 Clone the repository and navigate to its directory:
 
 ```bash
-git clone git@github.com:CarlBeek/kzg-ceremony-verifier.git
+git clone git@github.com:ethereum/kzg-ceremony-verifier.git
 cd kzg-ceremony-verifier
 ```
 
@@ -24,10 +24,10 @@ cargo build --release
 Run the executable from the target/release directory.
 
 ```bash
-./target/release/your_cli
+./target/release/kzg-ceremony-verifier
 ```
 
-This will download the transcript from the sequencer, verify all the powers, check the contribution witnesses. If the above succseeds, it will save the ceremony output to `./output_setups/trusted_setup_#.json`.
+This will download the transcript from the sequencer, verify all the powers, check the contribution witnesses. If the above succeeds, it will save the ceremony output to `./output_setups/trusted_setup_#.json`.
 
 ## Advanced Usage
 
@@ -36,7 +36,7 @@ This will download the transcript from the sequencer, verify all the powers, che
 The executable can be customised by supplying CLI arguments.
 
 ```bash
-./target/release/your_cli [OPTIONS]
+./target/release/kzg-ceremony-verifier [OPTIONS]
 ```
 
 ```text
