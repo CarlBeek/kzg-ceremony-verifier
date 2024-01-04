@@ -9,7 +9,7 @@ This is a tool for verifying the output of the Ethereum KZG Ceremony as well as 
 Clone the repository and navigate to its directory:
 
 ```bash
-git clone git@github.com:CarlBeek/kzg-ceremony-verifier.git
+git clone git@github.com:ethereum/kzg-ceremony-verifier.git
 cd kzg-ceremony-verifier
 ```
 
