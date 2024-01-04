@@ -151,6 +151,7 @@ impl Transcript {
     pub fn output_json_setup(&self, folder: &str) -> Result<(), CeremonyError> {
         let g1_lagrange = bls::get_lagrange_g1(&self.powers.g1)?;
         let json = OutputJson {
+            g1_monomial: self.powers.g1.clone(),
             g1_lagrange: g1_lagrange,
             g2_monomial: self.powers.g2.clone(),
         };
